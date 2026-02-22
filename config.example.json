@@ -1,0 +1,28 @@
+{
+  "username": "",
+  "password": "",
+  "saved_search_name": "인천조건검색",
+  "locators": {
+    "username_field": [
+      "id",
+      "id"
+    ],
+    "password_field": [
+      "id",
+      "passwd"
+    ],
+    "login_button": [
+      "id",
+      "btn_login"
+    ]
+  },
+  "headless": false,
+  "debug": true,
+  "debug_dir": "debug",
+  "step_delay_sec": 1.5,
+  "city": "인천광역시",
+  "radius_m": 400,
+  "api_keys": {
+    "kakao_rest_api_key": ""
+  }
+}

@@ -1,0 +1,19 @@
+selenium
+webdriver-manager
+crawl4ai>=0.1.0
+playwright>=1.40.0
+selenium>=4.9.0
+webdriver-manager>=3.8.6
+Pillow>=10.0.0  # For image processing (screenshots)
+
+# Development Tools
+pylint>=2.17.5
+black>=23.7.0
+mypy>=1.5.0
+
+# Optional (for better type hints)
+typing-extensions>=4.7.1
+
+# For testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
