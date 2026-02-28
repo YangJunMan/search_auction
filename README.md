@@ -2,7 +2,7 @@
 
 부동산 경매 정보를 편하게 살펴볼 수 있도록 만든 프로젝트입니다.
 
-[내 집 찾기 바로가기](https://selenium-web.vercel.app/)
+[내 집 찾기 바로가기](https://yangjunman-auction.vercel.app/)
 
 ## 시작하기
 
