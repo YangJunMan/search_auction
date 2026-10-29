@@ -1,4 +1,12 @@
 async function runSearch(username, password) {
+  try {
+    const probe = await fetch('https://www.my-auction.co.kr/member/login.php', { method: 'GET', signal: AbortSignal.timeout(8000) });
+    console.info('auction connectivity probe: HTTP', probe.status);
+    await probe.body?.cancel();
+  } catch (error) {
+    const code = error.cause?.code;
+    console.error('auction connectivity probe:', typeof code === 'string' && /^[A-Z_]+$/.test(code) ? code : error.name);
+  }
   const { default: puppeteer } = await import('puppeteer-core');
   const { default: chromium } = await import('@sparticuz/chromium');
   const browser = await puppeteer.launch({ args: chromium.args, executablePath: await chromium.executablePath(), headless: true });
