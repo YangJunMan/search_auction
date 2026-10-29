@@ -47,7 +47,7 @@ async function runSearch(username, password) {
       return { '용도':cells[2].querySelector('strong')?.innerText.trim() || '', '사건번호':parts[1] || '', '소재지':cells[3].querySelector('li')?.innerText.trim() || '', '감정가':prices[0] || '', '최저가':prices[1] || '', '매각기일':cells[6].innerText.trim().split('\n')[0], '현재상태':cells[5].innerText.trim() };
     }).filter(Boolean));
   } catch (error) {
-    console.error('auction search stage:', stage, 'error type:', error.name);
+    console.error('auction search stage:', stage, 'error type:', error.name, 'network code:', String(error.message).match(/net::ERR_[A-Z_]+/)?.[0] || 'none');
     throw error;
   } finally { await browser.close(); }
 }
