@@ -1,0 +1,63 @@
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
+
+async function runSearch(username, password) {
+  const browser = await puppeteer.launch({ args: chromium.args, executablePath: await chromium.executablePath(), headless: true });
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(20000);
+    let loginRejected = false;
+    page.on('dialog', async dialog => { loginRejected = true; await dialog.dismiss(); });
+    await page.goto('https://www.my-auction.co.kr/member/login.php', {waitUntil:'domcontentloaded'});
+    await page.type('#id', username);
+    await page.type('#passwd', password);
+    await Promise.all([
+      page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}).catch(() => null),
+      page.click('#btn_login'),
+    ]);
+    if (loginRejected || /login(?:_handle)?\.php/i.test(page.url())) throw new Error('AUTH_FAILED');
+    await page.goto('https://www.my-auction.co.kr/auction/search.php', {waitUntil:'domcontentloaded'});
+    if (/member\/login/i.test(page.url())) throw new Error('AUTH_FAILED');
+    await page.waitForSelector('#sc_tab');
+    const tab = await page.$$('#sc_tab a');
+    let found = false;
+    for (const item of tab) {
+      const text = await item.evaluate(el => el.textContent.trim());
+      if (text === '내 검색조건') { await item.click(); found = true; break; }
+    }
+    if (!found) throw new Error('SEARCH_UNAVAILABLE');
+    await page.waitForSelector('#sc_list a');
+    const searches = await page.$$('#sc_list a');
+    let selected = false;
+    for (const item of searches) {
+      const text = await item.evaluate(el => el.textContent.trim());
+      if (text === '인천조건검색') { await item.click(); selected = true; break; }
+    }
+    if (!selected) throw new Error('SEARCH_MISSING');
+    await page.waitForSelector('table.tbl_auction_list tbody tr');
+    return await page.$$eval('table.tbl_auction_list tbody tr', rows => rows.map(row => {
+      const cells = row.querySelectorAll('td');
+      if (cells.length < 8) return null;
+      const parts = cells[2].innerText.trim().split('\n');
+      const prices = cells[4].innerText.trim().split('\n');
+      return { '용도':cells[2].querySelector('strong')?.innerText.trim() || '', '사건번호':parts[1] || '', '소재지':cells[3].querySelector('li')?.innerText.trim() || '', '감정가':prices[0] || '', '최저가':prices[1] || '', '매각기일':cells[6].innerText.trim().split('\n')[0], '현재상태':cells[5].innerText.trim() };
+    }).filter(Boolean));
+  } finally { await browser.close(); }
+}
+
+function makeHandler(runner = runSearch) {
+  return async function handler(req,res) {
+    res.setHeader('Cache-Control','no-store');
+    res.setHeader('X-Content-Type-Options','nosniff');
+    if (req.method !== 'POST') return res.status(405).json({error:'요청 방법을 확인해 주세요.'});
+    const {username,password} = req.body || {};
+    if (typeof username !== 'string' || typeof password !== 'string' || !username.trim() || !password || username.length>256 || password.length>256) return res.status(400).json({error:'아이디와 비밀번호를 입력해 주세요.'});
+    try { const items = await runner(username,password); return res.status(200).json({items}); }
+    catch (e) {
+      const errors={AUTH_FAILED:'로그인하지 못했습니다. 계정 정보를 확인해 주세요.', SEARCH_MISSING:'저장된 검색 조건을 찾을 수 없습니다.', SEARCH_UNAVAILABLE:'검색 화면을 불러올 수 없습니다.'};
+      return res.status(502).json({error:errors[e.message] || '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'});
+    }
+  };
+}
+module.exports = makeHandler();
+module.exports.makeHandler = makeHandler;

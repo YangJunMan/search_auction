@@ -62,3 +62,6 @@ config.json
 
 # Website source
 !web/*.html
+
+# Web dependencies
+web/node_modules/
