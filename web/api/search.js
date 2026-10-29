@@ -1,7 +1,6 @@
-const puppeteer = require('puppeteer-core');
-const chromium = require('@sparticuz/chromium');
-
 async function runSearch(username, password) {
+  const { default: puppeteer } = await import('puppeteer-core');
+  const { default: chromium } = await import('@sparticuz/chromium');
   const browser = await puppeteer.launch({ args: chromium.args, executablePath: await chromium.executablePath(), headless: true });
   try {
     const page = await browser.newPage();

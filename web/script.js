@@ -22,7 +22,7 @@ form.addEventListener('submit', async (event) => {
   result.replaceChildren();
   try {
     const response = await fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:document.querySelector('#username').value,password:password.value})});
-    const data = await response.json();
+    const data = await response.json().catch(() => ({error:'서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'}));
     if (!response.ok) throw new Error(data.error || '요청을 처리하지 못했습니다.');
     message.textContent = `검색이 끝났습니다. ${data.items.length}건을 찾았습니다.`;
     for (const item of data.items) {
