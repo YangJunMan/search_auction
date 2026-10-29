@@ -7,7 +7,13 @@ async function runSearch(username, password) {
     const page = await browser.newPage();
     page.setDefaultTimeout(20000);
     let loginRejected = false;
-    page.on('dialog', async dialog => { loginRejected = true; await dialog.dismiss(); });
+    page.on('dialog', async dialog => {
+      loginRejected = true;
+      const alertText = dialog.message();
+      const alertClass = /error2/i.test(alertText) ? 'error2' : /error1/i.test(alertText) ? 'error1' : /중복|접속|로그인/i.test(alertText) ? 'login-related' : 'other';
+      console.error('auction login dialog class:', alertClass);
+      await dialog.dismiss();
+    });
     stage = 'login_page';
     await page.goto('https://www.my-auction.co.kr/member/login.php', {waitUntil:'domcontentloaded'});
     stage = 'login_form';
@@ -18,7 +24,10 @@ async function runSearch(username, password) {
       page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}).catch(() => null),
       page.click('#btn_login'),
     ]);
-    if (loginRejected || /login(?:_handle)?\.php/i.test(page.url())) throw new Error('AUTH_FAILED');
+    if (loginRejected || /login(?:_handle)?\.php/i.test(page.url())) {
+      console.error('auction login result:', loginRejected ? 'dialog' : 'login-path');
+      throw new Error('AUTH_FAILED');
+    }
     stage = 'search_page';
     await page.goto('https://www.my-auction.co.kr/auction/search.php', {waitUntil:'domcontentloaded'});
     if (/member\/login/i.test(page.url())) throw new Error('AUTH_FAILED');
@@ -61,7 +70,7 @@ function makeHandler(runner = runSearch) {
     if (typeof username !== 'string' || typeof password !== 'string' || !username.trim() || !password || username.length>256 || password.length>256) return res.status(400).json({error:'아이디와 비밀번호를 입력해 주세요.'});
     try { const items = await runner(username,password); return res.status(200).json({items}); }
     catch (e) {
-      const errors={AUTH_FAILED:'로그인하지 못했습니다. 계정 정보를 확인해 주세요.', SEARCH_MISSING:'저장된 검색 조건을 찾을 수 없습니다.', SEARCH_UNAVAILABLE:'검색 화면을 불러올 수 없습니다.'};
+      const errors={AUTH_FAILED:'로그인을 완료하지 못했습니다. 잠시 후 다시 시도하거나 문의해 주세요.', SEARCH_MISSING:'저장된 검색 조건을 찾을 수 없습니다.', SEARCH_UNAVAILABLE:'검색 화면을 불러올 수 없습니다.'};
       return res.status(502).json({error:errors[e.message] || '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'});
     }
   };
