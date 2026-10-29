@@ -18,3 +18,9 @@ test('does not expose internal errors or credentials', async () => {
   const res=response(); await handler({method:'POST',body:{username:'example',password:'secret'}},res);
   assert.equal(res.statusCode,502); assert.equal(JSON.stringify(res.body).includes('secret'),false);
 });
+test('selects named saved search if present, otherwise chooses the first usable search', () => {
+  const { chooseSavedSearch } = require('../api/search');
+  assert.equal(chooseSavedSearch([{name:'삭제', onclick:'deleteSearch(1)'},{name:'다른 조건',onclick:'loadSearch(2)'},{name:'인천조건검색',onclick:'loadSearch(3)'}]),2);
+  assert.equal(chooseSavedSearch([{name:'삭제',onclick:'deleteSearch(1)'},{name:'다른 조건',onclick:'loadSearch(2)'}]),1);
+  assert.equal(chooseSavedSearch([{name:'삭제',onclick:'deleteSearch(1)'}]),-1);
+});
