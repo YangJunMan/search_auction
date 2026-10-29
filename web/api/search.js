@@ -2,19 +2,24 @@ async function runSearch(username, password) {
   const { default: puppeteer } = await import('puppeteer-core');
   const { default: chromium } = await import('@sparticuz/chromium');
   const browser = await puppeteer.launch({ args: chromium.args, executablePath: await chromium.executablePath(), headless: true });
+  let stage = 'browser';
   try {
     const page = await browser.newPage();
     page.setDefaultTimeout(20000);
     let loginRejected = false;
     page.on('dialog', async dialog => { loginRejected = true; await dialog.dismiss(); });
+    stage = 'login_page';
     await page.goto('https://www.my-auction.co.kr/member/login.php', {waitUntil:'domcontentloaded'});
+    stage = 'login_form';
     await page.type('#id', username);
     await page.type('#passwd', password);
+    stage = 'login_submit';
     await Promise.all([
       page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}).catch(() => null),
       page.click('#btn_login'),
     ]);
     if (loginRejected || /login(?:_handle)?\.php/i.test(page.url())) throw new Error('AUTH_FAILED');
+    stage = 'search_page';
     await page.goto('https://www.my-auction.co.kr/auction/search.php', {waitUntil:'domcontentloaded'});
     if (/member\/login/i.test(page.url())) throw new Error('AUTH_FAILED');
     await page.waitForSelector('#sc_tab');
@@ -41,6 +46,9 @@ async function runSearch(username, password) {
       const prices = cells[4].innerText.trim().split('\n');
       return { '용도':cells[2].querySelector('strong')?.innerText.trim() || '', '사건번호':parts[1] || '', '소재지':cells[3].querySelector('li')?.innerText.trim() || '', '감정가':prices[0] || '', '최저가':prices[1] || '', '매각기일':cells[6].innerText.trim().split('\n')[0], '현재상태':cells[5].innerText.trim() };
     }).filter(Boolean));
+  } catch (error) {
+    console.error('auction search stage:', stage, 'error type:', error.name);
+    throw error;
   } finally { await browser.close(); }
 }
 
