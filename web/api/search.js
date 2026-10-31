@@ -1,6 +1,7 @@
 const { geocodeItems } = require('../lib/geo');
 const { pageUrls } = require('../lib/pagination');
 const { normalizeDetailUrl } = require('../lib/detail-url');
+const { sealSession, openSession, readSessionCookie, cookieHeader, clearCookie } = require('../lib/session');
 
 function chooseSavedSearch(entries, requested = '') {
   const usable = entries.map((entry, index) => ({...entry, index})).filter(entry => entry.name && entry.onclick && !/삭제|delete|remove|del_/i.test(entry.name + ' ' + entry.onclick));
@@ -8,7 +9,7 @@ function chooseSavedSearch(entries, requested = '') {
   return choice ? choice.index : -1;
 }
 
-async function runSearch(username, password, requested = '') {
+async function runSearch(username, password, requested = '', sessionCookies = null) {
   try {
     const probe = await fetch('https://www.my-auction.co.kr/member/login.php', { method: 'GET', signal: AbortSignal.timeout(8000) });
     console.info('auction connectivity probe: HTTP', probe.status);
@@ -32,25 +33,30 @@ async function runSearch(username, password, requested = '') {
       console.error('auction login dialog class:', alertClass);
       await dialog.dismiss();
     });
-    stage = 'login_page';
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try { await page.goto('https://www.my-auction.co.kr/member/login.php', {waitUntil:'domcontentloaded', timeout: 10000}); break; }
-      catch (error) { if (attempt === 1) throw error; }
+    if (sessionCookies) {
+      stage = 'restore_session';
+      await browser.setCookie(...sessionCookies);
+    } else {
+      stage = 'login_page';
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try { await page.goto('https://www.my-auction.co.kr/member/login.php', {waitUntil:'domcontentloaded', timeout: 10000}); break; }
+        catch (error) { if (attempt === 1) throw error; }
+      }
+      stage = 'login_form';
+      await page.type('#id', username);
+      await page.type('#passwd', password);
+      stage = 'login_submit';
+      await Promise.all([
+        page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}).catch(() => null),
+        page.click('#btn_login'),
+      ]);
+      if (loginRejected) throw new Error('AUTH_FAILED');
     }
-    stage = 'login_form';
-    await page.type('#id', username);
-    await page.type('#passwd', password);
-    stage = 'login_submit';
-    await Promise.all([
-      page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}).catch(() => null),
-      page.click('#btn_login'),
-    ]);
-    if (loginRejected) throw new Error('AUTH_FAILED');
     stage = 'search_page';
     await page.goto('https://www.my-auction.co.kr/auction/search.php', {waitUntil:'domcontentloaded'});
-    if (loginRejected || /member\/login/i.test(page.url())) throw new Error('AUTH_FAILED');
+    if (loginRejected || /member\/login/i.test(page.url())) throw new Error(sessionCookies ? 'SESSION_EXPIRED' : 'AUTH_FAILED');
     const signedIn = await page.evaluate(() => Array.from(document.querySelectorAll('a')).some(a => /logout/i.test(a.getAttribute('href') || '') || /로그아웃/.test((a.textContent || '').replace(/\s/g, ''))));
-    if (!signedIn) throw new Error('AUTH_UNCONFIRMED');
+    if (!signedIn) throw new Error(sessionCookies ? 'SESSION_EXPIRED' : 'AUTH_UNCONFIRMED');
     await page.waitForSelector('#sc_tab');
     const tab = await page.$$('#sc_tab a');
     let found = false;
@@ -99,23 +105,49 @@ async function runSearch(username, password, requested = '') {
     const items = firstItems.concat(...chunks).map(item => ({...item, '상세주소':normalizeDetailUrl(item['상세주소'])}));
     stage = 'geocoding';
     const enriched = await geocodeItems(items, process.env.KAKAO_REST_API_KEY);
-    return {items: enriched, searchName};
+    const cookies = (await browser.cookies()).filter(c => /(^|\.)my-auction\.co\.kr$/i.test(c.domain) && !/^(_ga|_gid|_gcl|_fbp)/i.test(c.name)).map(c => {
+      const out={name:c.name,value:c.value,domain:c.domain,path:c.path,secure:c.secure,httpOnly:c.httpOnly};
+      if (c.expires > 0) out.expires=c.expires;
+      if (c.sameSite) out.sameSite=c.sameSite;
+      return out;
+    });
+    return {items: enriched, searchName, sessionCookies:cookies};
   } catch (error) {
     console.error('auction search stage:', stage, 'error type:', error.name, 'network code:', String(error.message).match(/net::ERR_[A-Z_]+/)?.[0] || 'none');
     throw error;
   } finally { await browser.close(); }
 }
 
-function makeHandler(runner = runSearch) {
+function makeHandler(runner = runSearch, getSecret = () => process.env.SESSION_SECRET || process.env.KAKAO_REST_API_KEY) {
   return async function handler(req,res) {
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');
+    const headers=req.headers || {};
+    if (headers.origin && headers.host && headers.origin !== `https://${headers.host}` && headers.origin !== `http://${headers.host}`) return res.status(403).json({error:'요청 출처를 확인해 주세요.'});
+    const token=readSessionCookie(headers.cookie);
+    const session=token ? openSession(token,getSecret()) : null;
+    if (req.method === 'GET') return res.status(200).json({authenticated:!!session});
+    if (req.method === 'DELETE') { res.setHeader('Set-Cookie',clearCookie()); return res.status(200).json({ok:true}); }
     if (req.method !== 'POST') return res.status(405).json({error:'요청 방법을 확인해 주세요.'});
     const {username,password,searchName = ''} = req.body || {};
-    if (typeof username !== 'string' || typeof password !== 'string' || !username.trim() || !password || username.length>256 || password.length>256 || typeof searchName !== 'string' || searchName.length > 100) return res.status(400).json({error:'아이디와 비밀번호를 입력해 주세요.'});
-    try { const result = await runner(username,password,searchName.trim()); return res.status(200).json(Array.isArray(result) ? {items:result} : result); }
-    catch (e) {
-      const errors={AUTH_UNCONFIRMED:'로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.', AUTH_FAILED:'로그인을 완료하지 못했습니다. 잠시 후 다시 시도하거나 문의해 주세요.', SEARCH_MISSING:'저장된 검색 조건을 찾을 수 없습니다.', SEARCH_UNAVAILABLE:'검색 화면을 불러올 수 없습니다.'};
+    const credentials=typeof username === 'string' && typeof password === 'string' && !!username.trim() && !!password && username.length<=256 && password.length<=256;
+    if (typeof searchName !== 'string' || searchName.length > 100) return res.status(400).json({error:'검색 조건 이름을 확인해 주세요.'});
+    if (!credentials && !session) {
+      if (token) return res.status(401).json({error:'로그인 시간이 끝났습니다. 다시 로그인해 주세요.',code:'SESSION_EXPIRED'});
+      return res.status(400).json({error:'아이디와 비밀번호를 입력해 주세요.'});
+    }
+    try {
+      const result=await runner(credentials ? username : undefined,credentials ? password : undefined,searchName.trim(),credentials ? null : session);
+      const {sessionCookies,...safeResult}=Array.isArray(result) ? {items:result} : result;
+      let sessionAvailable=false;
+      if (sessionCookies?.length) {
+        try { res.setHeader('Set-Cookie',cookieHeader(sealSession(sessionCookies,getSecret()))); sessionAvailable=true; }
+        catch (e) { console.error('session could not be saved:',e.message); }
+      }
+      return res.status(200).json({...safeResult,sessionAvailable});
+    } catch (e) {
+      const errors={AUTH_UNCONFIRMED:'로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.', AUTH_FAILED:'로그인을 완료하지 못했습니다. 잠시 후 다시 시도하거나 문의해 주세요.', SESSION_EXPIRED:'로그인 시간이 끝났습니다. 다시 로그인해 주세요.', SEARCH_MISSING:'저장된 검색 조건을 찾을 수 없습니다.', SEARCH_UNAVAILABLE:'검색 화면을 불러올 수 없습니다.'};
+      if (e.message === 'SESSION_EXPIRED') {res.setHeader('Set-Cookie',clearCookie()); return res.status(401).json({error:errors.SESSION_EXPIRED,code:'SESSION_EXPIRED'});}
       return res.status(502).json({error:errors[e.message] || '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'});
     }
   };

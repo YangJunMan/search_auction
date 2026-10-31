@@ -111,19 +111,41 @@ toggle.addEventListener('click', () => {
   toggle.setAttribute('aria-label', show ? '비밀번호 숨기기' : '비밀번호 표시');
 });
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  if (!form.reportValidity()) return;
-  submit.disabled = true;
-  message.hidden = false;
-  message.textContent = '로그인하고 전체 매물과 지도 위치를 찾고 있습니다. 결과가 많으면 몇 분 정도 걸릴 수 있습니다.';
-  result.hidden = true;
-  grid.replaceChildren();
+const sessionPanel = document.querySelector('#session-panel');
+const loading = document.querySelector('#loading-overlay');
+const loadingRegion = document.querySelector('#loading-region');
+const loginTitle = document.querySelector('#login-title');
+const panelSubtitle = document.querySelector('.panel-sub');
+let signedIn = false;
+
+function setSignedIn(value) {
+  signedIn = value;
+  sessionPanel.hidden = !value;
+  form.hidden = value;
+  loginTitle.textContent = value ? '다시 찾아볼까요?' : '반갑습니다';
+  panelSubtitle.textContent = value ? '지역을 고르면 저장된 조건으로 검색해요.' : '로그인 정보를 입력해 주세요.';
+}
+function setLoading(value, searchName = '') {
+  loading.hidden = !value;
+  loadingRegion.textContent = searchName === '경기도조건검색' ? '경기도 매물을 살펴보는 중입니다.' : '인천 매물을 살펴보는 중입니다.';
+  document.body.classList.toggle('searching', value);
+  submit.disabled = value;
+  sessionPanel.querySelectorAll('button').forEach(button => { button.disabled = value; });
+}
+async function search(body) {
+  setLoading(true, body.searchName);
+  message.hidden = true;
   try {
-    const response = await fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:document.querySelector('#username').value,password:password.value,searchName:document.querySelector('#search-name').value})});
+    const response = await fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     const data = await response.json().catch(() => ({error:'서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'}));
-    if (!response.ok) throw new Error(data.error || '요청을 처리하지 못했습니다.');
-    message.textContent = `검색 조건: ${data.searchName || "저장된 조건"} · ${data.items.length}건을 찾았습니다.`;
+    if (!response.ok) {
+      if (data.code === 'SESSION_EXPIRED') setSignedIn(false);
+      throw new Error(data.error || '요청을 처리하지 못했습니다.');
+    }
+    setSignedIn(!!data.sessionAvailable);
+    message.hidden = false;
+    message.textContent = `검색 조건: ${data.searchName || '저장된 조건'} · ${data.items.length}건을 찾았습니다.`;
+    if (!data.sessionAvailable) message.textContent += ' 다시 검색하려면 로그인해 주세요.';
     items = data.items;
     query.value = '';
     use.replaceChildren(new Option('전체', ''));
@@ -138,6 +160,23 @@ form.addEventListener('submit', async (event) => {
     result.hidden = false;
     maps.forEach(map => map.invalidateSize());
     result.scrollIntoView({behavior:'smooth', block:'start'});
-  } catch (error) { message.textContent = error.message || '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'; }
-  finally { password.value = ''; submit.disabled = false; }
+  } catch (error) { message.hidden = false; message.textContent = error.message || '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'; }
+  finally { password.value = ''; setLoading(false); }
+}
+form.addEventListener('submit', event => {
+  event.preventDefault();
+  if (!form.reportValidity()) return;
+  search({username:document.querySelector('#username').value,password:password.value,searchName:document.querySelector('#search-name').value});
 });
+sessionPanel.querySelectorAll('[data-search]').forEach(button => button.addEventListener('click', () => {
+  if (signedIn) search({searchName:button.dataset.search});
+}));
+document.querySelector('#logout').addEventListener('click', async () => {
+  try {
+    const response=await fetch('/api/search', {method:'DELETE'});
+    if (!response.ok) throw new Error('로그아웃하지 못했습니다. 다시 시도해 주세요.');
+    setSignedIn(false); result.hidden = true; message.hidden = false; message.textContent = '로그아웃했습니다.';
+    items = []; grid.replaceChildren(); maps.forEach(map => map.remove()); maps = [];
+  } catch (error) { message.hidden = false; message.textContent = error.message; }
+});
+fetch('/api/search', {method:'GET'}).then(response => response.ok ? response.json() : null).then(data => { if (data?.authenticated) setSignedIn(true); }).catch(() => {});

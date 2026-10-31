@@ -23,13 +23,19 @@
     <section class="login-panel" aria-labelledby="login-title">
       <div class="panel-top"><span class="panel-icon" aria-hidden="true">⌂</span><span>ㅁㅁ옥션 계정</span></div>
       <h2 id="login-title">반갑습니다</h2><p class="panel-sub">로그인 정보를 입력해 주세요.</p>
+      <div id="session-panel" class="session-panel" hidden>
+        <p class="session-greeting">로그인 상태가 유지되고 있어요</p>
+        <p class="session-help">보고 싶은 지역을 선택해 다시 검색하세요.</p>
+        <div class="condition-buttons" aria-label="검색 지역 선택"><button type="button" data-search="인천조건검색">인천 매물 찾기</button><button type="button" data-search="경기도조건검색">경기도 매물 찾기</button></div>
+        <button type="button" id="logout" class="logout-button">로그아웃</button>
+      </div>
       <form id="login-form" novalidate>
         <label for="username">아이디</label><input id="username" type="text" placeholder="아이디를 입력해 주세요" autocomplete="off" required>
         <label for="password">비밀번호</label><div class="password-wrap"><input id="password" type="password" placeholder="비밀번호를 입력해 주세요" autocomplete="off" required><button type="button" id="toggle" aria-label="비밀번호 표시">보기</button></div>
-        <label for="search-name">검색 조건 이름 <small>(선택)</small></label><input id="search-name" type="text" placeholder="비워두면 저장된 조건으로 검색해요" maxlength="100">
+        <label for="search-name">어느 지역을 볼까요?</label><select id="search-name"><option value="인천조건검색">인천 매물</option><option value="경기도조건검색">경기도 매물</option></select>
         <button class="submit" type="submit">로그인 <span aria-hidden="true">→</span></button>
-        <p id="login-message" class="form-message" role="status" aria-live="polite" hidden></p>
       </form>
+      <p id="login-message" class="form-message" role="status" aria-live="polite" hidden></p>
 
       <p class="account-help">계정 정보가 기억나지 않으시나요? 아들에게 문의해 주세요.</p>
       <div class="contact"><span class="contact-icon" aria-hidden="true">✳</span><div><strong>문의 사항이 있나요?</strong><p>아들에게 연락 주세요. 언제든지요~</p></div></div>
@@ -40,6 +46,9 @@
     <div class="results-tools"><label for="result-query">주소 또는 사건번호 검색</label><input id="result-query" type="search" placeholder="찾고 싶은 지역이나 사건번호를 입력하세요"><label for="result-use">물건 종류</label><select id="result-use"><option value="">전체</option></select><label class="recommend-filter"><input type="checkbox" id="result-recommended"> 역 400m 이내만</label><label for="result-min-distance">역 거리(m)</label><input type="number" id="result-min-distance" min="0" placeholder="최소"><span aria-hidden="true">~</span><input type="number" id="result-max-distance" min="0" placeholder="최대"><label for="result-sort">정렬</label><select id="result-sort"><option value="original">검색 결과 순서</option><option value="distance">역 가까운 순</option><option value="price">최저가 낮은 순</option><option value="date">매각기일 빠른 순</option></select><button type="button" id="result-export">엑셀용 저장</button></div>
     <p id="map-notice" class="map-notice" hidden></p><p id="result-empty" hidden>해당하는 매물이 없습니다.</p><div id="result-grid" class="result-grid"></div><nav class="result-pages" aria-label="결과 페이지"><button id="result-prev" type="button">이전</button><span id="result-page-label"></span><button id="result-next" type="button">다음</button></nav>
   </section>
+  <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite" aria-busy="true" hidden>
+    <div class="loading-box"><span class="loading-spinner" aria-hidden="true"></span><strong>매물을 찾고 있어요</strong><p id="loading-region"></p><p>전체 매물과 지도 위치를 확인하고 있습니다.<br>결과가 많으면 몇 분 정도 걸릴 수 있어요.</p><small>창을 닫지 말고 잠시만 기다려 주세요.</small></div>
+  </div>
   <footer><span>내 집 찾기</span><span>천천히 살펴보고, 좋은 선택 하세요.</span></footer>
 </body>
 </html>
