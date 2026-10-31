@@ -1,3 +1,6 @@
+const { geocodeItems } = require('../lib/geo');
+const { pageUrls } = require('../lib/pagination');
+
 function chooseSavedSearch(entries, requested = '') {
   const usable = entries.map((entry, index) => ({...entry, index})).filter(entry => entry.name && entry.onclick && !/삭제|delete|remove|del_/i.test(entry.name + ' ' + entry.onclick));
   const choice = requested ? usable.find(entry => entry.name === requested) : usable.find(entry => entry.name === '인천조건검색') || usable[0];
@@ -63,14 +66,39 @@ async function runSearch(username, password, requested = '') {
     const searchName = entries[chosen].name;
     await searches[chosen].click();
     await page.waitForSelector('table.tbl_auction_list tbody tr');
-    const items = await page.$$eval('table.tbl_auction_list tbody tr', rows => rows.map(row => {
+    const parseRows = rows => rows.map(row => {
       const cells = row.querySelectorAll('td');
       if (cells.length < 8) return null;
       const parts = cells[2].innerText.trim().split('\n');
       const prices = cells[4].innerText.trim().split('\n');
-      return { '용도':cells[2].querySelector('strong')?.innerText.trim() || '', '사건번호':parts[1] || '', '소재지':cells[3].querySelector('li')?.innerText.trim() || '', '감정가':prices[0] || '', '최저가':prices[1] || '', '매각기일':cells[6].innerText.trim().split('\n')[0], '현재상태':cells[5].innerText.trim() };
-    }).filter(Boolean));
-    return {items, searchName};
+      const locations = cells[3].querySelectorAll('li');
+      return { '용도':cells[2].querySelector('strong')?.innerText.trim() || '', '사건번호':parts[1] || '', '소재지':locations[0]?.innerText.trim() || '', '감정가':prices[0] || '', '최저가':prices[1] || '', '매각기일':cells[6].innerText.trim().split('\n')[0], '면적':locations[1]?.innerText.trim() || '', '특수권리':Array.from(cells[3].querySelectorAll('span.refer a')).map(a => a.innerText.trim()).filter(Boolean).join(' '), '현재상태':cells[5].innerText.trim() };
+    }).filter(Boolean);
+    const selector = 'table.tbl_auction_list tbody tr';
+    const firstItems = await page.$$eval(selector, parseRows);
+    const lastHref = await page.$eval('#youtube_number a.ytb_end', a => a.getAttribute('href')).catch(() => null);
+    const urls = pageUrls(page.url(), lastHref);
+    const chunks = new Array(urls.length);
+    let nextPage = 0;
+    stage = 'search_pages';
+    async function collectPages() {
+      const worker = await browser.newPage();
+      worker.setDefaultTimeout(20000);
+      try {
+        while (nextPage < urls.length) {
+          const index = nextPage++;
+          await worker.goto(urls[index], {waitUntil:'domcontentloaded', timeout:20000});
+          await worker.waitForSelector(selector);
+          chunks[index] = await worker.$$eval(selector, parseRows);
+          if (!chunks[index].length) throw new Error('SEARCH_PAGE_EMPTY');
+        }
+      } finally { await worker.close(); }
+    }
+    await Promise.all(Array.from({length:Math.min(4, urls.length)}, collectPages));
+    const items = firstItems.concat(...chunks);
+    stage = 'geocoding';
+    const enriched = await geocodeItems(items, process.env.KAKAO_REST_API_KEY);
+    return {items: enriched, searchName};
   } catch (error) {
     console.error('auction search stage:', stage, 'error type:', error.name, 'network code:', String(error.message).match(/net::ERR_[A-Z_]+/)?.[0] || 'none');
     throw error;
