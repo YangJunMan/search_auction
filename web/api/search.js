@@ -1,6 +1,7 @@
 const { geocodeItems } = require('../lib/geo');
 const { pageUrls } = require('../lib/pagination');
 const { normalizeDetailUrl } = require('../lib/detail-url');
+const { validateFirstPage } = require('../lib/result-validation');
 const { sealSession, openSession, readSessionCookie, cookieHeader, clearCookie } = require('../lib/session');
 
 function chooseSavedSearch(entries, requested = '') {
@@ -83,6 +84,12 @@ async function runSearch(username, password, requested = '', sessionCookies = nu
     }).filter(Boolean);
     const selector = 'table.tbl_auction_list tbody tr';
     const firstItems = await page.$$eval(selector, parseRows);
+    const total = await page.evaluate(() => {
+      const heading = Array.from(document.querySelectorAll('.auction_result h4')).map(e => e.innerText).find(t => /검색결과/.test(t));
+      const match = heading?.match(/검색결과\s*:\s*([\d,]+)\s*건/);
+      return match ? Number(match[1].replace(/,/g, '')) : null;
+    });
+    validateFirstPage(firstItems, total);
     const lastHref = await page.$eval('#youtube_number a.ytb_end', a => a.getAttribute('href')).catch(() => null);
     const urls = pageUrls(page.url(), lastHref);
     const chunks = new Array(urls.length);
@@ -94,14 +101,19 @@ async function runSearch(username, password, requested = '', sessionCookies = nu
       try {
         while (nextPage < urls.length) {
           const index = nextPage++;
-          await worker.goto(urls[index], {waitUntil:'domcontentloaded', timeout:20000});
-          await worker.waitForSelector(selector);
-          chunks[index] = await worker.$$eval(selector, parseRows);
-          if (!chunks[index].length) throw new Error('SEARCH_PAGE_EMPTY');
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              await worker.goto(urls[index], {waitUntil:'domcontentloaded', timeout:20000});
+              await worker.waitForSelector(selector);
+              chunks[index] = await worker.$$eval(selector, parseRows);
+              if (!chunks[index].length) throw new Error('SEARCH_PAGE_EMPTY');
+              break;
+            } catch (error) { if (attempt === 1) throw error; }
+          }
         }
       } finally { await worker.close(); }
     }
-    await Promise.all(Array.from({length:Math.min(4, urls.length)}, collectPages));
+    await Promise.all(Array.from({length:Math.min(2, urls.length)}, collectPages));
     const items = firstItems.concat(...chunks).map(item => ({...item, '상세주소':normalizeDetailUrl(item['상세주소'])}));
     stage = 'geocoding';
     const enriched = await geocodeItems(items, process.env.KAKAO_REST_API_KEY);
@@ -146,7 +158,7 @@ function makeHandler(runner = runSearch, getSecret = () => process.env.SESSION_S
       }
       return res.status(200).json({...safeResult,sessionAvailable});
     } catch (e) {
-      const errors={AUTH_UNCONFIRMED:'로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.', AUTH_FAILED:'로그인을 완료하지 못했습니다. 잠시 후 다시 시도하거나 문의해 주세요.', SESSION_EXPIRED:'로그인 시간이 끝났습니다. 다시 로그인해 주세요.', SEARCH_MISSING:'저장된 검색 조건을 찾을 수 없습니다.', SEARCH_UNAVAILABLE:'검색 화면을 불러올 수 없습니다.'};
+      const errors={AUTH_UNCONFIRMED:'로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.', AUTH_FAILED:'로그인을 완료하지 못했습니다. 잠시 후 다시 시도하거나 문의해 주세요.', SESSION_EXPIRED:'로그인 시간이 끝났습니다. 다시 로그인해 주세요.', SEARCH_MISSING:'저장된 검색 조건을 찾을 수 없습니다.', SEARCH_UNAVAILABLE:'검색 화면을 불러올 수 없습니다.', SEARCH_RESULT_UNREADABLE:'매물 목록을 확인하지 못했습니다. 잠시 후 다시 검색해 주세요.'};
       if (e.message === 'SESSION_EXPIRED') {res.setHeader('Set-Cookie',clearCookie()); return res.status(401).json({error:errors.SESSION_EXPIRED,code:'SESSION_EXPIRED'});}
       return res.status(502).json({error:errors[e.message] || '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'});
     }
