@@ -101,7 +101,7 @@ async function runSearch(username, password, requested = '', sessionCookies = nu
     let nextPage = 0;
     stage = 'search_pages';
     async function collectPages() {
-      const worker = await browser.newPage();
+      const worker = page;
       worker.setDefaultTimeout(20000);
       try {
         while (nextPage < urls.length) {
@@ -122,9 +122,9 @@ async function runSearch(username, password, requested = '', sessionCookies = nu
             }
           }
         }
-      } finally { await worker.close(); }
+      } finally { /* The original search page is closed with the browser. */ }
     }
-    await Promise.allSettled(Array.from({length:Math.min(2, urls.length)}, collectPages));
+    await Promise.allSettled(Array.from({length:Math.min(1, urls.length)}, collectPages));
     const completedChunks = chunks.filter(Array.isArray);
     const incompletePages = urls.length - completedChunks.length;
     const items = firstItems.concat(...completedChunks).map(item => ({...item, '상세주소':normalizeDetailUrl(item['상세주소'])}));
