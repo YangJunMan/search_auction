@@ -73,7 +73,12 @@ async function runSearch(username, password, requested = '', sessionCookies = nu
     if (chosen < 0) throw new Error('SEARCH_MISSING');
     const searchName = entries[chosen].name;
     await searches[chosen].click();
-    await page.waitForSelector('table.tbl_auction_list tbody tr');
+    await page.waitForFunction(() => {
+      const rows = Array.from(document.querySelectorAll('table.tbl_auction_list tbody tr'));
+      const hasData = rows.some(row => row.querySelectorAll('td').length >= 8);
+      const heading = Array.from(document.querySelectorAll('.auction_result h4')).map(el => el.innerText).find(text => /검색결과/.test(text));
+      return hasData || /검색결과\s*:\s*0\s*건/.test(heading || '');
+    }, {timeout:20000});
     const parseRows = rows => rows.map(row => {
       const cells = row.querySelectorAll('td');
       if (cells.length < 8) return null;
