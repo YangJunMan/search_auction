@@ -113,7 +113,13 @@ async function runSearch(username, password, requested = '', sessionCookies = nu
               chunks[index] = await worker.$$eval(selector, parseRows);
               if (!chunks[index].length) throw new Error('SEARCH_PAGE_EMPTY');
               break;
-            } catch (error) { if (attempt === 1) throw error; }
+            } catch (error) {
+              if (attempt === 1) {
+                const path = (() => { try { return new URL(worker.url()).pathname; } catch { return 'unavailable'; } })();
+                console.error('auction page failure:', index + 2, 'type:', error.name, 'path:', path, 'code:', String(error.message).match(/net::ERR_[A-Z_]+/)?.[0] || 'none');
+                throw error;
+              }
+            }
           }
         }
       } finally { await worker.close(); }
