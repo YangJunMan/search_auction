@@ -67,6 +67,19 @@ function displayResults() {
       value.textContent = key === '역까지거리_m' ? `${item[key].toLocaleString('ko-KR')}m` : item[key]; entry.append(label, value); details.append(entry);
     }
     article.append(details);
+    if (item['상세주소']) {
+      const detail = document.createElement('a');
+      detail.className = 'result-link';
+      detail.href = item['상세주소'];
+      detail.target = '_blank';
+      detail.rel = 'noopener noreferrer';
+      detail.textContent = '매물 자세히 보기 ↗';
+      detail.setAttribute('aria-label', `${address.textContent} 매물 자세히 보기 (새 창)`);
+      article.append(detail);
+      const addressLink = document.createElement('a');
+      addressLink.href = item['상세주소']; addressLink.target = '_blank'; addressLink.rel = 'noopener noreferrer';
+      addressLink.textContent = address.textContent; address.replaceChildren(addressLink);
+    }
     if (Number.isFinite(item.lat) && Number.isFinite(item.lng) && window.L) {
       const mapNode = document.createElement('div'); mapNode.className = 'result-map'; mapNode.setAttribute('aria-label', `${address.textContent} 위치`); article.append(mapNode); grid.append(article);
       const map = L.map(mapNode, {scrollWheelZoom: false}).setView([item.lat, item.lng], 15);

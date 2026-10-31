@@ -1,5 +1,6 @@
 const { geocodeItems } = require('../lib/geo');
 const { pageUrls } = require('../lib/pagination');
+const { normalizeDetailUrl } = require('../lib/detail-url');
 
 function chooseSavedSearch(entries, requested = '') {
   const usable = entries.map((entry, index) => ({...entry, index})).filter(entry => entry.name && entry.onclick && !/삭제|delete|remove|del_/i.test(entry.name + ' ' + entry.onclick));
@@ -72,7 +73,7 @@ async function runSearch(username, password, requested = '') {
       const parts = cells[2].innerText.trim().split('\n');
       const prices = cells[4].innerText.trim().split('\n');
       const locations = cells[3].querySelectorAll('li');
-      return { '용도':cells[2].querySelector('strong')?.innerText.trim() || '', '사건번호':parts[1] || '', '소재지':locations[0]?.innerText.trim() || '', '감정가':prices[0] || '', '최저가':prices[1] || '', '매각기일':cells[6].innerText.trim().split('\n')[0], '면적':locations[1]?.innerText.trim() || '', '특수권리':Array.from(cells[3].querySelectorAll('span.refer a')).map(a => a.innerText.trim()).filter(Boolean).join(' '), '현재상태':cells[5].innerText.trim() };
+      return { '용도':cells[2].querySelector('strong')?.innerText.trim() || '', '사건번호':parts[1] || '', '소재지':locations[0]?.innerText.trim() || '', '감정가':prices[0] || '', '최저가':prices[1] || '', '매각기일':cells[6].innerText.trim().split('\n')[0], '면적':locations[1]?.innerText.trim() || '', '특수권리':Array.from(cells[3].querySelectorAll('span.refer a')).map(a => a.innerText.trim()).filter(Boolean).join(' '), '현재상태':cells[5].innerText.trim(), '상세주소':cells[3].querySelector('a[href*="/view/"]')?.getAttribute('href') || '' };
     }).filter(Boolean);
     const selector = 'table.tbl_auction_list tbody tr';
     const firstItems = await page.$$eval(selector, parseRows);
@@ -95,7 +96,7 @@ async function runSearch(username, password, requested = '') {
       } finally { await worker.close(); }
     }
     await Promise.all(Array.from({length:Math.min(4, urls.length)}, collectPages));
-    const items = firstItems.concat(...chunks);
+    const items = firstItems.concat(...chunks).map(item => ({...item, '상세주소':normalizeDetailUrl(item['상세주소'])}));
     stage = 'geocoding';
     const enriched = await geocodeItems(items, process.env.KAKAO_REST_API_KEY);
     return {items: enriched, searchName};
