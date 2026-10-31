@@ -9,6 +9,8 @@ const query = document.querySelector('#result-query');
 const sort = document.querySelector('#result-sort');
 const count = document.querySelector('#results-count');
 const use = document.querySelector('#result-use');
+const minDistance = document.querySelector('#result-min-distance');
+const maxDistance = document.querySelector('#result-max-distance');
 const recommended = document.querySelector('#result-recommended');
 const previous = document.querySelector('#result-prev');
 const next = document.querySelector('#result-next');
@@ -25,7 +27,12 @@ function displayResults() {
   maps = [];
   grid.replaceChildren();
   const keyword = query.value.trim().toLowerCase();
-  const filtered = items.filter(item => `${item['소재지'] || ''} ${item['사건번호'] || ''}`.toLowerCase().includes(keyword) && (!use.value || item['용도'] === use.value) && (!recommended.checked || item['추천'] === true));
+  const min = minDistance.value === '' ? null : Number(minDistance.value);
+  const max = maxDistance.value === '' ? null : Number(maxDistance.value);
+  const filtered = items.filter(item => {
+    const distance = item['역까지거리_m'];
+    return `${item['소재지'] || ''} ${item['사건번호'] || ''}`.toLowerCase().includes(keyword) && (!use.value || item['용도'] === use.value) && (!recommended.checked || item['추천'] === true) && (min === null || (distance != null && distance >= min)) && (max === null || (distance != null && distance <= max));
+  });
   const number = value => Number(String(value || '').replace(/[^0-9]/g, '')) || Infinity;
   if (sort.value === 'distance') filtered.sort((a,b) => (a['역까지거리_m'] ?? Infinity) - (b['역까지거리_m'] ?? Infinity));
   if (sort.value === 'price') filtered.sort((a, b) => number(a['최저가']) - number(b['최저가']));
@@ -73,6 +80,8 @@ query.addEventListener('input', applyFilter);
 sort.addEventListener('change', applyFilter);
 use.addEventListener('change', applyFilter);
 recommended.addEventListener('change', applyFilter);
+minDistance.addEventListener('input', applyFilter);
+maxDistance.addEventListener('input', applyFilter);
 previous.addEventListener('click', () => { currentPage--; displayResults(); result.scrollIntoView({block:'start'}); });
 next.addEventListener('click', () => { currentPage++; displayResults(); result.scrollIntoView({block:'start'}); });
 document.querySelector('#result-export').addEventListener('click', () => {
@@ -94,7 +103,7 @@ form.addEventListener('submit', async (event) => {
   if (!form.reportValidity()) return;
   submit.disabled = true;
   message.hidden = false;
-  message.textContent = '로그인하고 매물을 찾고 있습니다. 잠시 기다려 주세요.';
+  message.textContent = '로그인하고 전체 매물과 지도 위치를 찾고 있습니다. 결과가 많으면 몇 분 정도 걸릴 수 있습니다.';
   result.hidden = true;
   grid.replaceChildren();
   try {
@@ -106,7 +115,11 @@ form.addEventListener('submit', async (event) => {
     query.value = '';
     use.replaceChildren(new Option('전체', ''));
     [...new Set(items.map(item => item['용도']).filter(Boolean))].sort().forEach(value => use.add(new Option(value, value)));
-    recommended.checked = false; currentPage = 1;
+    recommended.checked = false; minDistance.value = ''; maxDistance.value = ''; currentPage = 1;
+    const missing = items.filter(item => !Number.isFinite(item.lat) || !Number.isFinite(item.lng)).length;
+    const mapNotice = document.querySelector('#map-notice');
+    mapNotice.hidden = !missing;
+    mapNotice.textContent = missing ? `${missing}건은 위치를 확인하지 못해 지도가 표시되지 않습니다.` : '';
     sort.value = 'original';
     displayResults();
     result.hidden = false;

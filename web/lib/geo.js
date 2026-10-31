@@ -1,12 +1,14 @@
 async function geocodeItems(items, key, request = fetch) {
   if (!key) return items;
   const cache = new Map();
+  const failures = {};
+  const countFailure = code => { failures[code] = (failures[code] || 0) + 1; };
   async function query(url) {
     try {
       const response = await request(url, {headers: {Authorization: `KakaoAK ${key}`}, signal: AbortSignal.timeout(5000)});
-      if (!response.ok) return null;
+      if (!response.ok) { countFailure(`http_${response.status || 'unknown'}`); return null; }
       return (await response.json()).documents?.[0] || null;
-    } catch { return null; }
+    } catch { countFailure('network'); return null; }
   }
   async function locate(address) {
     const normalized = address.replace(/\s*\([^)]*\)/g, '').split(',')[0].trim();
@@ -33,6 +35,7 @@ async function geocodeItems(items, key, request = fetch) {
     }
   }
   await Promise.all(Array.from({length:Math.min(items.length, 10)}, worker));
+  console.info('geocoding summary:', JSON.stringify({items:items.length, located:result.filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng)).length, failures}));
   return result;
 }
 module.exports = {geocodeItems};
