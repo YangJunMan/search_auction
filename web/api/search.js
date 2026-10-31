@@ -118,8 +118,10 @@ async function runSearch(username, password, requested = '', sessionCookies = nu
         }
       } finally { await worker.close(); }
     }
-    await Promise.all(Array.from({length:Math.min(2, urls.length)}, collectPages));
-    const items = firstItems.concat(...chunks).map(item => ({...item, '상세주소':normalizeDetailUrl(item['상세주소'])}));
+    await Promise.allSettled(Array.from({length:Math.min(2, urls.length)}, collectPages));
+    const completedChunks = chunks.filter(Array.isArray);
+    const incompletePages = urls.length - completedChunks.length;
+    const items = firstItems.concat(...completedChunks).map(item => ({...item, '상세주소':normalizeDetailUrl(item['상세주소'])}));
     stage = 'geocoding';
     const enriched = await geocodeItems(items, process.env.KAKAO_REST_API_KEY);
     const cookies = (await browser.cookies()).filter(c => /(^|\.)my-auction\.co\.kr$/i.test(c.domain) && !/^(_ga|_gid|_gcl|_fbp)/i.test(c.name)).map(c => {
@@ -128,7 +130,7 @@ async function runSearch(username, password, requested = '', sessionCookies = nu
       if (c.sameSite) out.sameSite=c.sameSite;
       return out;
     });
-    return {items: enriched, searchName, sessionCookies:cookies};
+    return {items: enriched, searchName, sessionCookies:cookies, incompletePages};
   } catch (error) {
     console.error('auction search stage:', stage, 'error type:', error.name, 'network code:', String(error.message).match(/net::ERR_[A-Z_]+/)?.[0] || 'none');
     throw error;

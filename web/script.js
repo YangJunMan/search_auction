@@ -20,6 +20,7 @@ let visibleItems = [];
 const pageSize = 12;
 const empty = document.querySelector('#result-empty');
 let items = [];
+let incompletePagesCount = 0;
 let maps = [];
 
 function displayResults() {
@@ -37,7 +38,7 @@ function displayResults() {
   if (sort.value === 'distance') filtered.sort((a,b) => (a['역까지거리_m'] ?? Infinity) - (b['역까지거리_m'] ?? Infinity));
   if (sort.value === 'price') filtered.sort((a, b) => number(a['최저가']) - number(b['최저가']));
   if (sort.value === 'date') filtered.sort((a, b) => (a['매각기일'] || '9999').localeCompare(b['매각기일'] || '9999'));
-  count.textContent = `전체 ${items.length}건 중 ${filtered.length}건 표시`;
+  count.textContent = `${incompletePagesCount ? '불러온' : '전체'} ${items.length}건 중 ${filtered.length}건 표시`;
   empty.hidden = filtered.length > 0;
   visibleItems = filtered;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -147,8 +148,13 @@ async function search(body) {
     setSignedIn(!!data.sessionAvailable);
     message.hidden = false;
     message.textContent = `검색 조건: ${data.searchName || '저장된 조건'} · ${data.items.length}건을 찾았습니다.`;
+    if (data.incompletePages) message.textContent += ` 일부 결과 ${data.incompletePages}페이지를 불러오지 못했습니다. 전체 매물은 아닙니다.`;
     if (!data.sessionAvailable) message.textContent += ' 다시 검색하려면 로그인해 주세요.';
     items = data.items;
+    incompletePagesCount = Number(data.incompletePages) || 0;
+    const partialNotice = document.querySelector('#partial-notice');
+    partialNotice.hidden = !incompletePagesCount;
+    partialNotice.textContent = incompletePagesCount ? `일부 결과 ${incompletePagesCount}페이지를 불러오지 못했습니다. 표시된 매물은 전체 결과가 아닙니다.` : '';
     query.value = '';
     use.replaceChildren(new Option('전체', ''));
     [...new Set(items.map(item => item['용도']).filter(Boolean))].sort().forEach(value => use.add(new Option(value, value)));
