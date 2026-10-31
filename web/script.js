@@ -115,12 +115,14 @@ const sessionPanel = document.querySelector('#session-panel');
 const loading = document.querySelector('#loading-overlay');
 const loadingRegion = document.querySelector('#loading-region');
 const loginTitle = document.querySelector('#login-title');
+const resultConditionBar = document.querySelector('#result-condition-bar');
 const panelSubtitle = document.querySelector('.panel-sub');
 let signedIn = false;
 
 function setSignedIn(value) {
   signedIn = value;
   sessionPanel.hidden = !value;
+  resultConditionBar.hidden = !value;
   form.hidden = value;
   loginTitle.textContent = value ? '다시 찾아볼까요?' : '반갑습니다';
   panelSubtitle.textContent = value ? '지역을 고르면 저장된 조건으로 검색해요.' : '로그인 정보를 입력해 주세요.';
@@ -130,7 +132,7 @@ function setLoading(value, searchName = '') {
   loadingRegion.textContent = searchName === '경기도조건검색' ? '경기도 매물을 살펴보는 중입니다.' : '인천 매물을 살펴보는 중입니다.';
   document.body.classList.toggle('searching', value);
   submit.disabled = value;
-  sessionPanel.querySelectorAll('button').forEach(button => { button.disabled = value; });
+  document.querySelectorAll('[data-search], #logout').forEach(button => { button.disabled = value; });
 }
 async function search(body) {
   setLoading(true, body.searchName);
@@ -168,7 +170,7 @@ form.addEventListener('submit', event => {
   if (!form.reportValidity()) return;
   search({username:document.querySelector('#username').value,password:password.value,searchName:document.querySelector('#search-name').value});
 });
-sessionPanel.querySelectorAll('[data-search]').forEach(button => button.addEventListener('click', () => {
+document.querySelectorAll('[data-search]').forEach(button => button.addEventListener('click', () => {
   if (signedIn) search({searchName:button.dataset.search});
 }));
 document.querySelector('#logout').addEventListener('click', async () => {
