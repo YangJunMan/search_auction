@@ -135,6 +135,7 @@ def main() -> None:
 		title="역 주변 추천 매물",
 		subtitle=f"기준역: {', '.join(station_names)} · 반경 {args.radius}m",
 		output_html_path=reco_html,
+		items=recommended,
 	)
 
 	print(f"추천 JSON: {reco_json}")

@@ -23,7 +23,7 @@ class SearchHandler(BaseAutomation):
 
 	def apply_search_options(self, options: Dict) -> bool:
 		def _apply():
-			self.wait.until(EC.presence_of_element_located((By.ID, "search_form")))
+			self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#search_form, #searchForm")))
 			def set_value_by_name(name: str, value: str):
 				el = self.driver.find_element(By.NAME, name)
 				if el.tag_name.lower() == 'select':

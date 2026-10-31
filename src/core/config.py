@@ -2,7 +2,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, Dict, Tuple
-from selenium.webdriver.common.by import By
+try:
+	from selenium.webdriver.common.by import By
+except ImportError:
+	# Fallback if selenium is not installed yet (e.g. lightweight environment or unit testing)
+	class By:  # type: ignore
+		ID = "id"
+		NAME = "name"
+		CSS_SELECTOR = "css selector"
+		XPATH = "xpath"
+		CLASS_NAME = "class name"
+		TAG_NAME = "tag name"
 
 
 class Config:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import html as html_lib
 from pathlib import Path
 from typing import List, Dict
 
@@ -201,8 +202,10 @@ def build_gallery_html(items: List[Dict], title: str, subtitle: str, output_html
 """
 
 	output_html_path.parent.mkdir(parents=True, exist_ok=True)
-	html = tpl.replace("__TITLE__", title).replace("__SUBTITLE__", subtitle)
-	data_json = json.dumps(items, ensure_ascii=False)
+	safe_title = html_lib.escape(title)
+	safe_subtitle = html_lib.escape(subtitle)
+	html = tpl.replace("__TITLE__", safe_title).replace("__SUBTITLE__", safe_subtitle)
+	data_json = json.dumps(items, ensure_ascii=False).replace("</", "<\\/")
 	html = html.replace("__DATA__", data_json)
 	output_html_path.write_text(html, encoding="utf-8")
 
