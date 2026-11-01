@@ -173,7 +173,7 @@ function makeHandler(runner = runSearch, getSecret = () => process.env.SESSION_S
     } catch (e) {
       const errors={AUTH_UNCONFIRMED:'로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.', AUTH_FAILED:'로그인을 완료하지 못했습니다. 잠시 후 다시 시도하거나 문의해 주세요.', SESSION_EXPIRED:'로그인 시간이 끝났습니다. 다시 로그인해 주세요.', SEARCH_MISSING:'저장된 검색 조건을 찾을 수 없습니다.', SEARCH_UNAVAILABLE:'검색 화면을 불러올 수 없습니다.', SEARCH_RESULT_UNREADABLE:'매물 목록을 확인하지 못했습니다. 잠시 후 다시 검색해 주세요.'};
       if (e.message === 'SESSION_EXPIRED') {res.setHeader('Set-Cookie',clearCookie()); return res.status(401).json({error:errors.SESSION_EXPIRED,code:'SESSION_EXPIRED'});}
-      return res.status(502).json({error:errors[e.message] || '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'});
+      return res.status(502).json({error:errors[e.message] || (e.name === 'TimeoutError' ? '조회 시간이 초과되었습니다.' : `처리하지 못했습니다. (${e.message || '오류'})`), detail: e.message});
     }
   };
 }

@@ -4,5 +4,11 @@
     { "source": "/", "destination": "/web/index.html" },
     { "source": "/style.css", "destination": "/web/style.css" },
     { "source": "/script.js", "destination": "/web/script.js" }
-  ]
+  ],
+  "functions": {
+    "web/api/search.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
 }
