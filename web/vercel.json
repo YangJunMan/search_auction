@@ -1,4 +1,4 @@
 {
-  "regions": ["hnd1"],
+  "regions": ["icn1"],
   "functions": { "api/search.js": { "maxDuration": 180 } }
 }
